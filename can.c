@@ -282,8 +282,22 @@ ISR( CANIT_vect )
 	// Receive Interrupts
 	else if ( CANSTMOB & (1 << RXOK) )
 	{
+		// Default to impossible ID
+		uint16_t id = 0xFFFF;
+
 		// Load the message data into a free message buffer object
-		messageBuffer[bufIndex].id = (CANIDT2 >> 5) | ((CANIDT1 << 3) << 8);
+		//if( CANCDMOB & (1 << IDE) )
+		//{
+			// Message type is CAN 2.0B
+		//	id = (CANIDT4 >> 3) | ((CANIDT3 & 0x7F) << 5); 
+		//}
+		//else
+		//{
+			// Message type is CAN 2.0A
+			id = (CANIDT2 >> 5) | (((uint16_t)CANIDT1 << 3));
+		//}
+
+		messageBuffer[bufIndex].id = id;
 
 		messageBuffer[bufIndex].length = CANCDMOB & 0x0F;
 
