@@ -286,16 +286,16 @@ ISR( CANIT_vect )
 		uint16_t id = 0xFFFF;
 
 		// Load the message data into a free message buffer object
-		//if( CANCDMOB & (1 << IDE) )
-		//{
+		if( CANCDMOB & (1 << IDE) )
+		{
 			// Message type is CAN 2.0B
-		//	id = (CANIDT4 >> 3) | ((CANIDT3 & 0x7F) << 5); 
-		//}
-		//else
-		//{
+			id = (CANIDT4 >> 3) | ((CANIDT3 & 0x7F) << 5); 
+		}
+		else
+		{
 			// Message type is CAN 2.0A
 			id = (CANIDT2 >> 5) | (((uint16_t)CANIDT1 << 3));
-		//}
+		}
 
 		messageBuffer[bufIndex].id = id;
 
