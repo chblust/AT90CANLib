@@ -34,6 +34,9 @@
 // Length of the message buffer
 #define MESSAGE_BUFFER_LENGTH 20
 
+// Number of Message Objects in the CAN Controller
+#define MOB_COUNT 15
+
 // CAN 2.0 type A message information
 typedef struct 
 {

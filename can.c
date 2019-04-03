@@ -1,5 +1,4 @@
 #include "can.h"
-#include "MessageObjects.h"
 #include "avr/interrupt.h"
 #include "../dash/lightControl.h"
 
@@ -59,6 +58,7 @@ void initCAN()
  */
 uint8_t getFreeMob()
 {
+	uint8_t canPageSaved = CANPAGE;
 	// Iterate through the MOBs and check their 
 	for( uint8_t i = 0; i < MOB_COUNT; ++i )
 	{
@@ -69,12 +69,13 @@ uint8_t getFreeMob()
 		// If they are both 0, the MOB is 'disabled' and therefore available
 		if ( ( CANCDMOB & ( (1 << CONMOB1) | (1 << CONMOB0) ) ) == 0 )
 		{
+			CANPAGE = canPageSaved;
 			return i;
 		}
 	}
 
 	// No Free MOBs available
-
+	CANPAGE = canPageSaved;
 	return 0xFF;
 }
 
