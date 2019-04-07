@@ -59,9 +59,8 @@ void initCAN()
  */
 uint8_t getFreeMob()
 {
-	//static uint8_t free = 0;
-	//free += 1;
-	//return free;
+	// This commented out code is to prevent context switching when using this function.
+	// When it's not commented, it caused both CAN RX and TX to fail. The reasons for this are being investigated.
 	//uint8_t canPageSaved = CANPAGE;
 	// Iterate through the MOBs and check their 
 	for( uint8_t i = 0; i < MOB_COUNT; ++i )
@@ -255,13 +254,14 @@ uint8_t getMessage( CANMessage * message )
  */
 ISR( CANIT_vect )
 {
-	//setHeartBeat(1);
 	// **Save off CANPAGE to prevent application code bugs**
 	uint8_t canPage = CANPAGE;
 
-
-	//while( ((CANHPMOB & 0xF0) >> 4) != 0x0F )
-	//{
+	// CANHPMOB will contain the mob index of the highest priority mob that has interrupted,
+	// or 0xFF if no mob has interrupted. If multiple mobs have interrupted, they need to all be
+	// serviced, so this loop is required.
+	while( ((CANHPMOB & 0xF0) >> 4) != 0x0F )
+	{
 		// Point to the Message Object that needs to be serviced
 		CANPAGE = CANHPMOB & 0xF0;
 
@@ -334,7 +334,7 @@ ISR( CANIT_vect )
 			// Clear the error
 			CANGIT = 0;
 		}
-	//}
+	}
 
 	// Restore CANPAGE register to where application code had it before interrupt
 	CANPAGE = canPage;
