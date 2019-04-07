@@ -1,6 +1,7 @@
 #include "can.h"
 #include "avr/interrupt.h"
 #include "../dash/lightControl.h"
+#include "../daq/heartbeat.h"
 
 #include <util/delay.h>
 #include <avr/io.h>
@@ -58,7 +59,10 @@ void initCAN()
  */
 uint8_t getFreeMob()
 {
-	uint8_t canPageSaved = CANPAGE;
+	//static uint8_t free = 0;
+	//free += 1;
+	//return free;
+	//uint8_t canPageSaved = CANPAGE;
 	// Iterate through the MOBs and check their 
 	for( uint8_t i = 0; i < MOB_COUNT; ++i )
 	{
@@ -67,15 +71,15 @@ uint8_t getFreeMob()
 
 		// Check the bits indicating the type of MOB this is.
 		// If they are both 0, the MOB is 'disabled' and therefore available
-		if ( ( CANCDMOB & ( (1 << CONMOB1) | (1 << CONMOB0) ) ) == 0 )
+		if ( (CANCDMOB & 0xC0) == 0 )
 		{
-			CANPAGE = canPageSaved;
+			//CANPAGE = canPageSaved;
 			return i;
 		}
 	}
 
 	// No Free MOBs available
-	CANPAGE = canPageSaved;
+	//CANPAGE = canPageSaved;
 	return 0xFF;
 }
 
@@ -114,7 +118,7 @@ uint8_t sendCAN( CANMessage* message )
 	}
 
 	// Otherwise, switch to the MOB
-	CANPAGE |= mobIndex << 4;
+	CANPAGE |= (mobIndex << 4);
 
 	// Set up the MOB based on the message
 
@@ -153,7 +157,7 @@ uint8_t sendCAN( CANMessage* message )
 	}
 
 	// Set the MOB's mode to transmission, also activating it.
-	CANCDMOB |= 0x01 << CONMOB0;
+	CANCDMOB |= (0x01 << CONMOB0);
 
 	return 1;
 }
@@ -204,7 +208,7 @@ uint8_t listenForMessage( uint16_t id, uint8_t expectedLength )
 	}
 
 	// Set the MOb's mode to receive, also activating it.
-	CANCDMOB |= 0x02 << CONMOB0;
+	CANCDMOB |= (0x02 << CONMOB0);
 
 	return 1;
 }
@@ -251,81 +255,86 @@ uint8_t getMessage( CANMessage * message )
  */
 ISR( CANIT_vect )
 {
+	//setHeartBeat(1);
 	// **Save off CANPAGE to prevent application code bugs**
 	uint8_t canPage = CANPAGE;
 
-	// Point to the Message Object that needs to be serviced
-	CANPAGE = CANHPMOB & 0xF0;
 
-	// Service the correct kind of interrupt
-	// Transmit Interrupts
-	if( CANSTMOB & (1 << TXOK) )
-	{
-		// Acknowledge the interrupt
-		CANSTMOB = 0;
+	//while( ((CANHPMOB & 0xF0) >> 4) != 0x0F )
+	//{
+		// Point to the Message Object that needs to be serviced
+		CANPAGE = CANHPMOB & 0xF0;
 
-		// Free up the MOb
-		CANCDMOB = 0;
-
-		// Disable the MOb interrupt
-		uint8_t mob = (CANPAGE & 0xF0) >> 8;
-
-		// Disable interrupts for this MOb
-		if( mob < 8 )
+		// Service the correct kind of interrupt
+		// Transmit Interrupts
+		if( CANSTMOB & (1 << TXOK) )
 		{
-			CANIE2 |= ~(1 << mob);
+			// Acknowledge the interrupt
+			CANSTMOB = 0;
+
+			// Free up the MOb
+			CANCDMOB = 0;
+
+			// Determine the MOb index
+			uint8_t mob = (CANPAGE & 0xF0) >> 8;
+
+			// Disable interrupts for this MOb
+			if( mob < 8 )
+			{
+				CANIE2 &= ~(1 << mob);
+			}
+			else
+			{
+				CANIE1 &= ~(1 << (mob-8));
+			}
 		}
-		else
+		// Receive Interrupts
+		else if ( CANSTMOB & (1 << RXOK) )
 		{
-			CANIE1 |= ~(1 << (mob-8));
-		}
-	}
-	// Receive Interrupts
-	else if ( CANSTMOB & (1 << RXOK) )
-	{
-		// Default to impossible ID
-		uint16_t id = 0xFFFF;
+			// Default to impossible ID
+			uint16_t id = 0xFFFF;
 
-		// Load the message data into a free message buffer object
-		if( CANCDMOB & (1 << IDE) )
+			// Load the message data into a free message buffer object
+			if( CANCDMOB & (1 << IDE) )
+			{
+				// Message type is CAN 2.0B
+				id = (CANIDT4 >> 3) | ((CANIDT3 & 0x7F) << 5); 
+			}
+			else
+			{
+				// Message type is CAN 2.0A
+				id = (CANIDT2 >> 5) | (((uint16_t)CANIDT1 << 3));
+			}
+
+			messageBuffer[bufIndex].id = id;
+
+			messageBuffer[bufIndex].length = CANCDMOB & 0x0F;
+
+			// This trusts the length field in CANCDMOB is between 1 and 8...
+			for( uint8_t i = 0; i < messageBuffer[bufIndex].length; ++i )
+			{
+				// Load the next byte from the MOb data register into the buffer
+				// CANMSG is set to auto increment to the next byte after each read
+				messageBuffer[bufIndex].data[i] = CANMSG;
+			}
+
+			bufIndex = (bufIndex + 1) % MESSAGE_BUFFER_LENGTH;
+
+			// Acknowledge the interrupt
+			CANSTMOB = 0;
+
+			CANCDMOB |= (2 << CONMOB0);
+			
+		}
+		else if ( CANGIT & ~(1 << CANIT) )
 		{
-			// Message type is CAN 2.0B
-			id = (CANIDT4 >> 3) | ((CANIDT3 & 0x7F) << 5); 
+			// Preserve the last error received
+			lastError = CANGIT;
+
+			// Clear the error
+			CANGIT = 0;
 		}
-		else
-		{
-			// Message type is CAN 2.0A
-			id = (CANIDT2 >> 5) | (((uint16_t)CANIDT1 << 3));
-		}
-
-		messageBuffer[bufIndex].id = id;
-
-		messageBuffer[bufIndex].length = CANCDMOB & 0x0F;
-
-		// This trusts the length field in CANCDMOB is between 1 and 8...
-		for( uint8_t i = 0; i < messageBuffer[bufIndex].length; ++i )
-		{
-			// Load the next byte from the MOb data register into the buffer
-			// CANMSG is set to auto increment to the next byte after each read
-			messageBuffer[bufIndex].data[i] = CANMSG;
-		}
-
-		bufIndex = (bufIndex + 1) % MESSAGE_BUFFER_LENGTH;
-
-		// Acknowledge the interrupt
-		CANSTMOB = 0;
-
-		CANCDMOB |= (2 << CONMOB0);
-		
-	}
-	else if ( CANGIT & ~(1 << CANIT) )
-	{
-		// Preserve the last error received
-		lastError = CANGIT;
-
-		// Clear the error
-		CANGIT = 0;
-	}
+	//}
 
 	// Restore CANPAGE register to where application code had it before interrupt
 	CANPAGE = canPage;
