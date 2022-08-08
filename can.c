@@ -1,7 +1,5 @@
 #include "can.h"
 #include "avr/interrupt.h"
-#include "../dash/lightControl.h"
-#include "../daq/heartbeat.h"
 
 #include <util/delay.h>
 #include <avr/io.h>
@@ -22,7 +20,7 @@ uint8_t lastError = 0;
  * Reset and configure the AT90 to use CAN.
  *
  */
-void initCAN()
+void initCAN(void)
 {
 	// Issue a software reset of the CAN Controller
 	CANGCON |= ( 1 << SWRES );
@@ -57,7 +55,7 @@ void initCAN()
  * @return free MOB index, otherwise 0xFF
  *
  */
-uint8_t getFreeMob()
+uint8_t getFreeMob(void)
 {
 	// This commented out code is to prevent context switching when using this function.
 	// When it's not commented, it caused both CAN RX and TX to fail. The reasons for this are being investigated.
@@ -124,8 +122,8 @@ uint8_t sendCAN( CANMessage* message )
 	// This library currently only supports standard CAN IDs
 	CANIDT4 = 0;
 	CANIDT3 = 0;
-	CANIDT2 = (uint8_t) message->id << 5;
-	CANIDT1 = (uint8_t) message->id >> 3;
+	CANIDT2 = (uint8_t) (message->id << 5);
+	CANIDT1 = (uint8_t) (message->id >> 3);
 
 	// Ensure nothing bigger than 8 is written to the CANCDMOB register
 	if( message->length > 8 )

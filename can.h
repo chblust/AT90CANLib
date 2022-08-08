@@ -58,9 +58,9 @@ typedef struct
 	uint8_t acknowledgement : 1;
 } CANErrorStatus;
 
-void initCAN();
+void initCAN(void);
 
-CANErrorStatus getLastCANError();
+CANErrorStatus getLastCANError(void);
 
 uint8_t listenForMessage( uint16_t id, uint8_t expectedLength );
 
