@@ -122,8 +122,8 @@ uint8_t sendCAN( CANMessage* message )
 	// This library currently only supports standard CAN IDs
 	CANIDT4 = 0;
 	CANIDT3 = 0;
-	CANIDT2 = (uint8_t) message->id << 5;
-	CANIDT1 = (uint8_t) message->id >> 3;
+	CANIDT2 = (uint8_t) (message->id << 5);
+	CANIDT1 = (uint8_t) (message->id >> 3);
 
 	// Ensure nothing bigger than 8 is written to the CANCDMOB register
 	if( message->length > 8 )
